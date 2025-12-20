@@ -240,6 +240,7 @@ namespace protocol {
     static constexpr const char* APC_HID = "APC HID";
     static constexpr const char* CYBERPOWER = "CyberPower";
     static constexpr const char* GENERIC = "Generic";
+    static constexpr const char* POWERCOM = "PowerCOM";
     static constexpr const char* NONE = "None";
 }
 
@@ -248,9 +249,11 @@ namespace usb {
     // Common vendor IDs
     static constexpr uint16_t VENDOR_ID_APC = 0x051D;
     static constexpr uint16_t VENDOR_ID_CYBERPOWER = 0x0764;
+    static constexpr uint16_t VENDOR_ID_POWERCOM = 0x0D9F;
     
     // Common product IDs
     static constexpr uint16_t PRODUCT_ID_APC_BACK_UPS_ES_700 = 0x0002; // Back-UPS ES 700G (INPUT-ONLY)
+    static constexpr uint16_t PRODUCT_ID_POWERCOM_WOW_500U = 0x00A4;  // WOW-500U
     
     // Common HID report IDs used across multiple UPS vendors
     static constexpr uint8_t REPORT_ID_SERIAL_NUMBER = 0x02;  // Serial number string descriptor index
@@ -261,7 +264,7 @@ namespace log_messages {
     static constexpr const char* SETTING_UP = "Setting up UPS HID Component...";
     static constexpr const char* TRANSPORT_INIT_FAILED = "Failed to initialize transport";
     static constexpr const char* SETUP_COMPLETE = "UPS HID Component setup complete - waiting for USB device connection";
-    static constexpr const char* WAITING_FOR_DEVICE = "USB transport not connected - waiting for device";
+    static constexpr const char* WAITING_FOR_DEVICE = "USB transport not connected - waiting connect device";
     static constexpr const char* ATTEMPTING_DETECTION = "USB device connected - attempting protocol detection";
     static constexpr const char* PROTOCOL_DETECTED = "UPS protocol detected and configured successfully";
     static constexpr const char* DETECTION_FAILED = "Failed to detect UPS protocol (attempt #%u)";
