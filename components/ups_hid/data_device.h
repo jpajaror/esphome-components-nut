@@ -23,7 +23,8 @@ struct DeviceInfo {
     PROTOCOL_UNKNOWN = 0,
     PROTOCOL_APC_HID,
     PROTOCOL_CYBERPOWER_HID,
-    PROTOCOL_GENERIC_HID
+    PROTOCOL_GENERIC_HID,
+    PROTOCOL_POWERCOM_HID
   };
   
   DetectedProtocol detected_protocol{PROTOCOL_UNKNOWN};
