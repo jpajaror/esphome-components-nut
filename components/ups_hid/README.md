@@ -159,7 +159,7 @@ ups_hid:
   - Basic 5-sensor support with intelligent detection
   - Limited beeper/testing functionality
  
-- **`powercom`**: Force Generic HID Protocol
+- **`powercom`**: Force Powercom HID Protocol
   - Use for Powercom devices: WOW series
   - Basic 5-sensor support with intelligent detection
   - Battery and beeper testing
