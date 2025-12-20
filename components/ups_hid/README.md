@@ -71,6 +71,7 @@ UPS USB Port (Type-B)  ←→  USB Cable  ←→  ESP32-S3 USB OTG Port
 | **Tripp Lite** | SMART1500LCDT, UPS series | Generic HID | 0x09AE | ⚠️ Limited |
 | **Eaton/MGE** | Ellipse, Evolution series | Generic HID | 0x06DA | ⚠️ Limited |
 | **Belkin** | Older USB UPS models | Generic HID | 0x050D | ⚠️ Limited |
+| **Powercom** | WOW Series | Powercom HID | 0x0D9F | ✅ Confirmed |
 
 **Beeper Control Legend:**
 - ✅ **Confirmed**: Full beeper control tested and working (enable/disable/mute/test)
@@ -83,6 +84,7 @@ UPS USB Port (Type-B)  ←→  USB Cable  ←→  ESP32-S3 USB OTG Port
 | **APC HID** | USB HID reports | ✅ | Battery, voltage, status | ✅ Beeper control |
 | **CyberPower HID** | Vendor-specific HID | ✅ | Extended sensors, config | ✅ Beeper control |
 | **Generic HID** | Standard HID-PDC | ✅ | Basic monitoring | ⚠️ Limited writes |
+| **Powercom HID** | USB HID reports | ✅ | Battery, voltage, status | ✅ Beeper control |
 
 ## Configuration Reference
 
@@ -102,7 +104,7 @@ UPS USB Port (Type-B)  ←→  USB Cable  ←→  ESP32-S3 USB OTG Port
 ups_hid:
   id: ups_monitor                # Required component ID
   update_interval: 30s           # Polling interval (5s-60s)
-  protocol: auto                 # Protocol: auto, apc, cyberpower, generic
+  protocol: auto                 # Protocol: auto, apc, cyberpower, generic, powercom
   simulation_mode: false         # Testing without UPS hardware
 ```
 
@@ -132,6 +134,7 @@ ups_hid:
   # protocol: apc                # Force APC HID protocol
   # protocol: cyberpower         # Force CyberPower HID protocol  
   # protocol: generic            # Force Generic HID protocol
+  # protocol: powercom           # Force Powercom HID protocol
 ```
 
 **Protocol Options:**
@@ -155,6 +158,11 @@ ups_hid:
   - Universal fallback for unknown UPS brands
   - Basic 5-sensor support with intelligent detection
   - Limited beeper/testing functionality
+ 
+- **`powercom`**: Force Generic HID Protocol
+  - Use for Powercom devices: WOW series
+  - Basic 5-sensor support with intelligent detection
+  - Battery and beeper testing
 
 **When to use manual selection:**
 - Testing different protocols on the same device
