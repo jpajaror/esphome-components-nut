@@ -1180,10 +1180,6 @@ void CyberPowerProtocol::read_frequency_data(UpsData &data) {
   
   // Report IDs commonly used for frequency measurements:
   const std::vector<uint8_t> frequency_report_ids = {
-    HID_USAGE_POW_FREQUENCY,     // 0x32 - Standard HID frequency usage
-    HID_USAGE_POW_VOLTAGE,       // 0x30 - Input measurements (may include frequency)  
-    HID_USAGE_POW_CURRENT,       // 0x31 - Output measurements (may include frequency)
-    0x11, // CyberPower-specific frequency report (based on NUT analysis)
     INPUT_VOLTAGE_REPORT_ID,     // 0x0F - might contain frequency data
     OUTPUT_VOLTAGE_REPORT_ID,    // 0x12 - might contain frequency data
   };
