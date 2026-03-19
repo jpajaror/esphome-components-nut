@@ -272,12 +272,12 @@ void NutServerComponent::cleanup_inactive_clients() {
   uint32_t now = millis();
   std::lock_guard<std::mutex> lock(clients_mutex_);
   
-  for (auto &client : clients_) {
-    if (client.is_active() && (now - client.last_activity) > CLIENT_TIMEOUT_MS) {
-      ESP_LOGD(TAG, "Client timeout, disconnecting");
-      disconnect_client(client);
-    }
-  }
+  // for (auto &client : clients_) {
+  //   if (client.is_active() && (now - client.last_activity) > CLIENT_TIMEOUT_MS) {
+  //     ESP_LOGD(TAG, "Client timeout, disconnecting");
+  //     disconnect_client(client);
+  //   }
+  // }
 }
 
 void NutServerComponent::process_command(NutClient &client, const std::string &command) {
