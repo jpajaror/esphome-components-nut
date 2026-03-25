@@ -8,6 +8,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["esp32"]
+AUTO_LOAD = ["button", "number"]
 MULTI_CONF = True
 
 CONF_SIMULATION_MODE = "simulation_mode"
