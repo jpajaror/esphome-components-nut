@@ -23,18 +23,61 @@ std::vector<ProtocolFactory::ProtocolInfo>& ProtocolFactory::get_fallback_regist
 }
 
 void ProtocolFactory::ensure_initialized() {
-    // Registries are initialized on first access due to static storage
-    // This function exists for explicit initialization if needed
+    // Verhindert, dass die Protokolle mehrfach registriert werden
     static bool initialized = false;
     if (!initialized) {
-        if (esphome::logger::global_logger != nullptr)
-            ESP_LOGD(FACTORY_TAG, "Protocol factory registries initialized");
+        if (esphome::logger::global_logger != nullptr) {
+            ESP_LOGD(FACTORY_TAG, "Protocol factory registries initializing manually...");
+        }
+
+        // 1. APC Protokoll fest für Vendor 0x051D in die vendor_registry eintragen
+        get_vendor_registry()[0x051D].push_back({
+            "APC HID Protocol",
+            "APC Back-UPS and Smart-UPS HID protocol implementation",
+            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+                return std::make_unique<ApcHidProtocol>(parent);
+            },
+            100 // Priorität
+        });
+
+        // 2. CyberPower Protokoll für Vendor 0x0742 eintragen
+        get_vendor_registry()[0x0742].push_back({
+            "CyberPower HID Protocol",
+            "CyberPower HID UPS protocol implementation",
+            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+                return std::make_unique<CyberPowerProtocol>(parent);
+            },
+            100
+        });
+
+        // 3. Goldenmate Protokoll eintragen (Vendor-ID bei Bedarf anpassen, falls bekannt)
+        get_vendor_registry()[0x1234].push_back({
+            "Goldenmate HID Protocol",
+            "Goldenmate HID UPS protocol implementation",
+            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+                return std::make_unique<GoldenmateHidProtocol>(parent);
+            },
+            100
+        });
+
+        // 4. Generic Protokoll als globalen Rettungsanker in die fallback_registry eintragen
+        get_fallback_registry().push_back({
+            "Generic HID Protocol",
+            "Generic HID UPS protocol implementation",
+            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+                return std::make_unique<GenericHidProtocol>(parent);
+            },
+            10
+        });
+
         initialized = true;
+        if (esphome::logger::global_logger != nullptr) {
+            ESP_LOGD(FACTORY_TAG, "Protocol factory registries successfully initialized manually!");
+        }
     }
 }
 
-void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id, 
-                                                  const ProtocolInfo& info) {
+void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id,const ProtocolInfo& info) {
     ensure_initialized();
     
     auto& registry = get_vendor_registry();
