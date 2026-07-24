@@ -34,8 +34,8 @@ void ProtocolFactory::ensure_initialized() {
         apc_info.name = "APC HID Protocol";
         apc_info.description = "APC Back-UPS and Smart-UPS HID protocol implementation";
         apc_info.priority = 100;
-        apc_info.creator = [](UpsHidComponent* parent) {
-            return std::unique_ptr<UpsProtocolBase>(std::make_unique<ApcHidProtocol>(parent));
+        apc_info.creator = [](UpsHidComponent* parent) -> UpsProtocolBase* {
+            return std::make_unique<ApcHidProtocol>(parent).release();
         };
         get_vendor_registry()[0x051D].push_back(apc_info);
 
@@ -44,8 +44,8 @@ void ProtocolFactory::ensure_initialized() {
         cyber_info.name = "CyberPower HID Protocol";
         cyber_info.description = "CyberPower HID UPS protocol implementation";
         cyber_info.priority = 100;
-        cyber_info.creator = [](UpsHidComponent* parent) {
-            return std::unique_ptr<UpsProtocolBase>(std::make_unique<CyberPowerProtocol>(parent));
+        cyber_info.creator = [](UpsHidComponent* parent) -> UpsProtocolBase* {
+            return std::make_unique<CyberPowerProtocol>(parent).release();
         };
         get_vendor_registry()[0x0742].push_back(cyber_info);
 
@@ -54,8 +54,8 @@ void ProtocolFactory::ensure_initialized() {
         golden_info.name = "Goldenmate HID Protocol";
         golden_info.description = "Goldenmate HID UPS protocol implementation";
         golden_info.priority = 100;
-        golden_info.creator = [](UpsHidComponent* parent) {
-            return std::unique_ptr<UpsProtocolBase>(std::make_unique<GoldenmateHidProtocol>(parent));
+        golden_info.creator = [](UpsHidComponent* parent) -> UpsProtocolBase* {
+            return std::make_unique<GoldenmateHidProtocol>(parent).release();
         };
         get_vendor_registry()[0x1234].push_back(golden_info);
 
@@ -64,8 +64,8 @@ void ProtocolFactory::ensure_initialized() {
         generic_info.name = "Generic HID Protocol";
         generic_info.description = "Generic HID UPS protocol implementation";
         generic_info.priority = 10;
-        generic_info.creator = [](UpsHidComponent* parent) {
-            return std::unique_ptr<UpsProtocolBase>(std::make_unique<GenericHidProtocol>(parent));
+        generic_info.creator = [](UpsHidComponent* parent) -> UpsProtocolBase* {
+            return std::make_unique<GenericHidProtocol>(parent).release();
         };
         get_fallback_registry().push_back(generic_info);
 
