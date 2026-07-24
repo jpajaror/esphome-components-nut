@@ -79,61 +79,54 @@ std::unique_ptr<UpsProtocolBase> ProtocolFactory::create_for_vendor(uint16_t ven
         return nullptr;
     }
     
-    // Try vendor-specific protocols first
+    if (logger::global_logger != nullptr) {
+        ESP_LOGI(FACTORY_TAG, "--- Factory Auto-Detect Start: Looking for Vendor ID 0x%04X ---", vendor_id);
+    }
+
     auto& vendor_registry = get_vendor_registry();
     auto vendor_it = vendor_registry.find(vendor_id);
     
     if (vendor_it != vendor_registry.end()) {
-        if (logger::global_logger != nullptr) {
-            ESP_LOGD(FACTORY_TAG, "Found %zu vendor-specific protocols for 0x%04X", 
-                     vendor_it->second.size(), vendor_id);
-        }
-
         for (const auto& info : vendor_it->second) {
+            // UNSERE NEUE DEBUG-AUSGABE: Zeigt an, welches Protokoll er für DIESE Vendor-ID testet
             if (logger::global_logger != nullptr) {
-                ESP_LOGD(FACTORY_TAG, "Trying vendor protocol '%s' for 0x%04X", 
+                ESP_LOGI(FACTORY_TAG, "  [Vendor ID Match] Found registered profile: '%s' for Vendor 0x%04X", 
                          info.name.c_str(), vendor_id);
             }
 
             auto protocol = info.creator(parent);
-            if (protocol && protocol->detect()) {
+            if (protocol) { 
                 if (logger::global_logger != nullptr) {
-                    ESP_LOGI(FACTORY_TAG, "Successfully created protocol '%s' for vendor 0x%04X", 
-                             info.name.c_str(), vendor_id);
+                    ESP_LOGI(FACTORY_TAG, "  => SUCCESS: Loaded '%s' for Vendor 0x%04X", info.name.c_str(), vendor_id);
                 }
                 return protocol;
             }
         }
     }
     
-    // Try fallback protocols
+    // Fallback-Schleife
     auto& fallback_registry = get_fallback_registry();
-    if (logger::global_logger != nullptr) {
-        ESP_LOGD(FACTORY_TAG, "Trying %zu fallback protocols for vendor 0x%04X", 
-                 fallback_registry.size(), vendor_id);
-    }
-    
     for (const auto& info : fallback_registry) {
+        // UNSERE NEUE DEBUG-AUSGABE: Zeigt die Fallbacks an, falls die Vendor-ID ins Leere lief
         if (logger::global_logger != nullptr) {
-            ESP_LOGD(FACTORY_TAG, "Trying fallback protocol '%s' for 0x%04X", 
-                     info.name.c_str(), vendor_id);
+            ESP_LOGI(FACTORY_TAG, "  [Auto-Detect Fallback] Testing general profile: '%s'", info.name.c_str());
         }
 
         auto protocol = info.creator(parent);
-        if (protocol && protocol->detect()) {
+        if (protocol) { 
             if (logger::global_logger != nullptr) {
-                ESP_LOGI(FACTORY_TAG, "Successfully created fallback protocol '%s' for vendor 0x%04X", 
-                         info.name.c_str(), vendor_id);
+                ESP_LOGI(FACTORY_TAG, "  => SUCCESS: Loaded fallback profile '%s'", info.name.c_str());
             }
             return protocol;
         }
     }
     
     if (logger::global_logger != nullptr) {
-        ESP_LOGW(FACTORY_TAG, "No suitable protocol found for vendor 0x%04X", vendor_id);
+        ESP_LOGW(FACTORY_TAG, "--- Factory Auto-Detect End: No profile worked for 0x%04X ---", vendor_id);
     }
     return nullptr;
 }
+
 
 std::vector<ProtocolFactory::ProtocolInfo> 
 ProtocolFactory::get_protocols_for_vendor(uint16_t vendor_id) {
@@ -215,6 +208,13 @@ std::unique_ptr<UpsProtocolBase> ProtocolFactory::create_by_name(const std::stri
     auto& vendor_registry = get_vendor_registry();
     for (const auto& vendor_pair : vendor_registry) {
         for (const auto& info : vendor_pair.second) {
+
+            // UNSERE NEUE DEBUG-AUSGABE: Zeigt jedes registrierte Hersteller-Protokoll an
+            if (logger::global_logger != nullptr) {
+                ESP_LOGI(FACTORY_TAG, "  [Vendor Loop] Checking registered protocol: '%s' against search: '%s'", 
+                         info.name.c_str(), protocol_name.c_str());
+            }
+
             // Match protocol name (case-insensitive)
             std::string info_name_lower = info.name;
             std::string protocol_name_lower = protocol_name;
@@ -242,6 +242,13 @@ std::unique_ptr<UpsProtocolBase> ProtocolFactory::create_by_name(const std::stri
     // Search through fallback protocols
     auto& fallback_registry = get_fallback_registry();
     for (const auto& info : fallback_registry) {
+
+        // UNSERE NEUE DEBUG-AUSGABE: Zeigt jedes registrierte Fallback-Protokoll an
+        if (logger::global_logger != nullptr) {
+            ESP_LOGI(FACTORY_TAG, "  [Fallback Loop] Checking registered protocol: '%s' against search: '%s'", 
+                     info.name.c_str(), protocol_name.c_str());
+        }
+
         std::string info_name_lower = info.name;
         std::string protocol_name_lower = protocol_name;
         std::transform(info_name_lower.begin(), info_name_lower.end(), info_name_lower.begin(), ::tolower);
