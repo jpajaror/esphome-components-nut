@@ -23,56 +23,55 @@ std::vector<ProtocolFactory::ProtocolInfo>& ProtocolFactory::get_fallback_regist
 }
 
 void ProtocolFactory::ensure_initialized() {
-    // Verhindert, dass die Protokolle mehrfach registriert werden
     static bool initialized = false;
     if (!initialized) {
         if (esphome::logger::global_logger != nullptr) {
             ESP_LOGD(FACTORY_TAG, "Protocol factory registries initializing manually...");
         }
 
-        // 1. APC Protokoll fest für Vendor 0x051D in die vendor_registry eintragen
-        get_vendor_registry()[0x051D].push_back({
-            "APC HID Protocol",
-            "APC Back-UPS and Smart-UPS HID protocol implementation",
-            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
-                return std::make_unique<ApcHidProtocol>(parent);
-            },
-            100 // Priorität
-        });
+        // 1. APC Protokoll (Vendor 0x051D)
+        ProtocolInfo apc_info;
+        apc_info.name = "APC HID Protocol";
+        apc_info.description = "APC Back-UPS and Smart-UPS HID protocol implementation";
+        apc_info.priority = 100;
+        apc_info.creator = [](UpsHidComponent* parent) {
+            return std::unique_ptr<UpsProtocolBase>(std::make_unique<ApcHidProtocol>(parent));
+        };
+        get_vendor_registry()[0x051D].push_back(apc_info);
 
-        // 2. CyberPower Protokoll für Vendor 0x0742 eintragen
-        get_vendor_registry()[0x0742].push_back({
-            "CyberPower HID Protocol",
-            "CyberPower HID UPS protocol implementation",
-            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
-                return std::make_unique<CyberPowerProtocol>(parent);
-            },
-            100
-        });
+        // 2. CyberPower Protokoll (Vendor 0x0742)
+        ProtocolInfo cyber_info;
+        cyber_info.name = "CyberPower HID Protocol";
+        cyber_info.description = "CyberPower HID UPS protocol implementation";
+        cyber_info.priority = 100;
+        cyber_info.creator = [](UpsHidComponent* parent) {
+            return std::unique_ptr<UpsProtocolBase>(std::make_unique<CyberPowerProtocol>(parent));
+        };
+        get_vendor_registry()[0x0742].push_back(cyber_info);
 
-        // 3. Goldenmate Protokoll eintragen (Vendor-ID bei Bedarf anpassen, falls bekannt)
-        get_vendor_registry()[0x1234].push_back({
-            "Goldenmate HID Protocol",
-            "Goldenmate HID UPS protocol implementation",
-            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
-                return std::make_unique<GoldenmateHidProtocol>(parent);
-            },
-            100
-        });
+        // 3. Goldenmate Protokoll (Vendor 0x1234)
+        ProtocolInfo golden_info;
+        golden_info.name = "Goldenmate HID Protocol";
+        golden_info.description = "Goldenmate HID UPS protocol implementation";
+        golden_info.priority = 100;
+        golden_info.creator = [](UpsHidComponent* parent) {
+            return std::unique_ptr<UpsProtocolBase>(std::make_unique<GoldenmateHidProtocol>(parent));
+        };
+        get_vendor_registry()[0x1234].push_back(golden_info);
 
-        // 4. Generic Protokoll als globalen Rettungsanker in die fallback_registry eintragen
-        get_fallback_registry().push_back({
-            "Generic HID Protocol",
-            "Generic HID UPS protocol implementation",
-            [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
-                return std::make_unique<GenericHidProtocol>(parent);
-            },
-            10
-        });
+        // 4. Generic Protokoll (Weltweiter Fallback)
+        ProtocolInfo generic_info;
+        generic_info.name = "Generic HID Protocol";
+        generic_info.description = "Generic HID UPS protocol implementation";
+        generic_info.priority = 10;
+        generic_info.creator = [](UpsHidComponent* parent) {
+            return std::unique_ptr<UpsProtocolBase>(std::make_unique<GenericHidProtocol>(parent));
+        };
+        get_fallback_registry().push_back(generic_info);
 
         initialized = true;
         if (esphome::logger::global_logger != nullptr) {
-            ESP_LOGD(FACTORY_TAG, "Protocol factory registries successfully initialized manually!");
+            ESP_LOGD(FACTORY_TAG, "Protocol factory registries successfully initialized!");
         }
     }
 }
