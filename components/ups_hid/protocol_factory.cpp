@@ -11,17 +11,18 @@ namespace ups_hid {
 static const char *const FACTORY_TAG = "ups_hid.factory";
 
 // Static registry implementations
-std::unordered_map<uint16_t, std::vector<ProtocolFactory::ProtocolInfo>>& 
-ProtocolFactory::get_vendor_registry() {
-    static std::unordered_map<uint16_t, std::vector<ProtocolInfo>> vendor_registry;
-    return vendor_registry;
+std::map<uint16_t, std::vector<ProtocolInfo>>& ProtocolFactory::get_vendor_registry() {
+    // Durch das 'static' wird die Map erst EXAKT in der Millisekunde erzeugt,
+    // in der das allererste Makro versucht, etwas einzutragen!
+    static std::map<uint16_t, std::vector<ProtocolInfo>> instance;
+    return instance;
 }
 
-std::vector<ProtocolFactory::ProtocolInfo>& 
-ProtocolFactory::get_fallback_registry() {
-    static std::vector<ProtocolInfo> fallback_registry;
-    return fallback_registry;
+std::vector<ProtocolInfo>& ProtocolFactory::get_fallback_registry() {
+    static std::vector<ProtocolInfo> instance;
+    return instance;
 }
+
 
 void ProtocolFactory::ensure_initialized() {
     // Registries are initialized on first access due to static storage
