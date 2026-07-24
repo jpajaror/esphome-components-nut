@@ -765,6 +765,9 @@ void ApcReportParser::parse_voltage_report(const HidReport &report, UpsData &dat
   if (voltage_raw > 1000) {
     // Assume raw value needs scaling (e.g., 1367 → 136.7V)
     voltage_scaled = voltage_raw / battery::VOLTAGE_SCALE_FACTOR;
+    if (report.data[0] == APC_REPORT_ID_OUTPUT_VOLTAGE) {
+      voltage_scaled /= 10.0f;  // Adjust factor for battery DC
+    }
   } else {
     voltage_scaled = static_cast<float>(voltage_raw);
   }
