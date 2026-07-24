@@ -55,7 +55,7 @@ void ProtocolFactory::ensure_initialized() {
         golden_info.description = "Goldenmate HID UPS protocol implementation";
         golden_info.priority = 100;
         golden_info.creator = [](UpsHidComponent* parent) -> UpsProtocolBase* {
-            return std::make_unique<GoldenmateHidProtocol>(parent).release();
+            return std::make_unique<GoldenMateProtocol>(parent).release();
         };
         get_vendor_registry()[0x1234].push_back(golden_info);
 
