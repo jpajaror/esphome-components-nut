@@ -1,4 +1,5 @@
 #include "protocol_factory.h"
+#include "protocols.h"
 #include "ups_hid.h"
 #include "esphome/core/log.h"
 #include "esphome/components/logger/logger.h"
