@@ -39,7 +39,7 @@ static const uint8_t APC_REPORT_ID_POWER_SUMMARY = 0x0C;   // PowerSummary.Remai
 static const uint8_t APC_REPORT_ID_PRESENT_STATUS = 0x16;  // PowerSummary.PresentStatus bitmap
 static const uint8_t APC_REPORT_ID_INPUT_VOLTAGE = 0x31;   // UPS.Input.Voltage
 static const uint8_t APC_REPORT_ID_LOAD_PERCENT = 0x50;    // UPS.PowerConverter.PercentLoad
-static const uint8_t APC_REPORT_ID_OUTPUT_VOLTAGE = 0x09;  // PowerSummary.Voltage (legacy)
+static const uint8_t APC_REPORT_ID_OUTPUT_VOLTAGE = 0x42;  // PowerSummary.Voltage (legacy)
 static const uint8_t APC_REPORT_ID_FREQUENCY = 0x0D;       // Frequency information
 
 // 0x09 = 27.2 V  // Battery voltage at 24V system
