@@ -70,7 +70,7 @@ static const uint8_t APC_REPORT_ID_CHARGE_LOW = 0x11;      // Battery charge low
 static const uint8_t APC_REPORT_ID_INPUT_TRANSFER_LOW = 0x32;  // Input low voltage transfer point
 static const uint8_t APC_REPORT_ID_INPUT_TRANSFER_HIGH = 0x33; // Input high voltage transfer point
 static const uint8_t APC_REPORT_ID_PANEL_TEST = 0x79;      // Panel/UPS test control
-static const uint8_t APC_REPORT_ID_BATTERY_TEST = 0x21;    // Battery test control (same as test result)
+static const uint8_t APC_REPORT_ID_BATTERY_TEST = 0x52;    // Battery test control (same as test result)
 
 // Status bit masks
 static const uint8_t APC_STATUS_AC_PRESENT = 0x01;        // Bit 0: AC present
