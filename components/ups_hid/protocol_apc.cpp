@@ -1758,12 +1758,12 @@ bool ApcHidProtocol::start_battery_test_quick() {
   }
   
   // APC Back-UPS ES 700G (PID=usb::PRODUCT_ID_APC_BACK_UPS_ES_700) is INPUT-ONLY and doesn't support HID SET_REPORT
-  uint16_t product_id = parent_->get_product_id();
-  if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
-    ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
-    ESP_LOGI(APC_HID_TAG, "Tip: Use the physical TEST button on the UPS instead");
-    return false;
-  }
+  //uint16_t product_id = parent_->get_product_id();
+  //if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
+  //  ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
+  //  ESP_LOGI(APC_HID_TAG, "Tip: Use the physical TEST button on the UPS instead");
+  //  return false;
+  //}
   
   // For supported models: Based on NUT debug logs, APC uses report ID APC_REPORT_ID_TEST_RESULT for battery test
   // Command value 1 = Quick test (based on NUT test_write_info struct)
@@ -1810,12 +1810,12 @@ bool ApcHidProtocol::stop_battery_test() {
   ESP_LOGI(APC_HID_TAG, "Stopping APC battery test");
   
   // APC Back-UPS ES 700G (PID=usb::PRODUCT_ID_APC_BACK_UPS_ES_700) is INPUT-ONLY and doesn't support HID SET_REPORT
-  uint16_t product_id = parent_->get_product_id();
-  if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
-    ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
-    ESP_LOGI(APC_HID_TAG, "Physical test will stop automatically after completion");
-    return false;
-  }
+  //uint16_t product_id = parent_->get_product_id();
+  //if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
+  //  ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
+  //  ESP_LOGI(APC_HID_TAG, "Physical test will stop automatically after completion");
+  //  return false;
+  //}
   
   // For supported models: Based on NUT debug logs, APC uses report ID APC_REPORT_ID_TEST_RESULT for battery test
   // Command value 3 = Abort test (based on NUT test_write_info struct)
