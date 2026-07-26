@@ -57,7 +57,7 @@ static const uint8_t APC_REPORT_ID_BATTERY_VOLTAGE = 0x26;  // Battery voltage a
 static const uint8_t APC_REPORT_ID_INPUT_VOLTAGE_NOMINAL = 0x30; // Input voltage nominal
 static const uint8_t APC_REPORT_ID_DELAY_REBOOT = 0x40;    // Delay before reboot
 static const uint8_t APC_REPORT_ID_DELAY_SHUTDOWN = 0x41;  // Delay before shutdown
-static const uint8_t APC_REPORT_ID_TEST_RESULT = 0x52;     // Test result status
+static const uint8_t APC_REPORT_ID_TEST_RESULT = 0x21;     // Test result status
 static const uint8_t APC_REPORT_ID_AUDIBLE_BEEPER = 0x78;  // Alternative beeper control
 
 // Additional report IDs found in code
