@@ -1,6 +1,8 @@
 #include "protocol_factory.h"
+#include "protocols.h"
 #include "ups_hid.h"
 #include "esphome/core/log.h"
+#include "esphome/components/logger/logger.h"
 #include <algorithm>
 
 namespace esphome {
@@ -9,30 +11,72 @@ namespace ups_hid {
 static const char *const FACTORY_TAG = "ups_hid.factory";
 
 // Static registry implementations
-std::unordered_map<uint16_t, std::vector<ProtocolFactory::ProtocolInfo>>& 
-ProtocolFactory::get_vendor_registry() {
-    static std::unordered_map<uint16_t, std::vector<ProtocolInfo>> vendor_registry;
-    return vendor_registry;
+std::unordered_map<uint16_t, std::vector<ProtocolFactory::ProtocolInfo>>& ProtocolFactory::get_vendor_registry() {
+    // Durch das static wird die Map erst exakt im Moment des allerersten Eintrags im Speicher erzeugt
+    static std::unordered_map<uint16_t, std::vector<ProtocolFactory::ProtocolInfo>> instance;
+    return instance;
 }
 
-std::vector<ProtocolFactory::ProtocolInfo>& 
-ProtocolFactory::get_fallback_registry() {
-    static std::vector<ProtocolInfo> fallback_registry;
-    return fallback_registry;
+std::vector<ProtocolFactory::ProtocolInfo>& ProtocolFactory::get_fallback_registry() {
+    static std::vector<ProtocolFactory::ProtocolInfo> instance;
+    return instance;
 }
 
 void ProtocolFactory::ensure_initialized() {
-    // Registries are initialized on first access due to static storage
-    // This function exists for explicit initialization if needed
     static bool initialized = false;
     if (!initialized) {
-        ESP_LOGD(FACTORY_TAG, "Protocol factory registries initialized");
+        if (esphome::logger::global_logger != nullptr) {
+            ESP_LOGD(FACTORY_TAG, "Protocol factory registries initializing manually...");
+        }
+
+        // 1. APC Protokoll (Vendor 0x051D)
+        ProtocolInfo apc_info;
+        apc_info.name = "APC HID Protocol";
+        apc_info.description = "APC Back-UPS and Smart-UPS HID protocol implementation";
+        apc_info.priority = 100;
+        apc_info.creator = [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+            return std::make_unique<ApcHidProtocol>(parent);
+        };
+        get_vendor_registry()[0x051D].push_back(apc_info);
+
+        // 2. CyberPower Protokoll (Vendor 0x0742)
+        ProtocolInfo cyber_info;
+        cyber_info.name = "CyberPower HID Protocol";
+        cyber_info.description = "CyberPower HID UPS protocol implementation";
+        cyber_info.priority = 100;
+        cyber_info.creator = [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+            return std::make_unique<CyberPowerProtocol>(parent);
+        };
+        get_vendor_registry()[0x0742].push_back(cyber_info);
+
+        // 3. Goldenmate Protokoll (Vendor 0x1234)
+        ProtocolInfo golden_info;
+        golden_info.name = "Goldenmate HID Protocol";
+        golden_info.description = "Goldenmate HID UPS protocol implementation";
+        golden_info.priority = 100;
+        golden_info.creator = [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+            return std::make_unique<GoldenMateProtocol>(parent);
+        };
+        get_vendor_registry()[0x1234].push_back(golden_info);
+
+        // 4. Generic Protokoll (Weltweiter Fallback)
+        ProtocolInfo generic_info;
+        generic_info.name = "Generic HID Protocol";
+        generic_info.description = "Generic HID UPS protocol implementation";
+        generic_info.priority = 10;
+        generic_info.creator = [](UpsHidComponent* parent) -> std::unique_ptr<UpsProtocolBase> {
+            return std::make_unique<GenericHidProtocol>(parent);
+        };
+        get_fallback_registry().push_back(generic_info);
+
         initialized = true;
+        if (esphome::logger::global_logger != nullptr) {
+            ESP_LOGD(FACTORY_TAG, "Protocol factory registries successfully initialized!");
+        }
     }
 }
 
-void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id, 
-                                                  const ProtocolInfo& info) {
+void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id,const ProtocolInfo& info) {
     ensure_initialized();
     
     auto& registry = get_vendor_registry();
@@ -44,8 +88,9 @@ void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id,
                   return a.priority > b.priority;
               });
     
-    ESP_LOGI(FACTORY_TAG, "Registered protocol '%s' for vendor 0x%04X (priority %d)", 
-             info.name.c_str(), vendor_id, info.priority);
+    if (esphome::logger::global_logger != nullptr)
+        ESP_LOGI(FACTORY_TAG, "Registered protocol '%s' for vendor 0x%04X (priority %d)",
+                 info.name.c_str(), vendor_id, info.priority);
 }
 
 void ProtocolFactory::register_fallback_protocol(const ProtocolInfo& info) {
@@ -60,60 +105,69 @@ void ProtocolFactory::register_fallback_protocol(const ProtocolInfo& info) {
                   return a.priority > b.priority;
               });
     
-    ESP_LOGI(FACTORY_TAG, "Registered fallback protocol '%s' (priority %d)", 
-             info.name.c_str(), info.priority);
+    if (esphome::logger::global_logger != nullptr)
+        ESP_LOGI(FACTORY_TAG, "Registered fallback protocol '%s' (priority %d)",
+                 info.name.c_str(), info.priority);
 }
 
-std::unique_ptr<UpsProtocolBase> 
-ProtocolFactory::create_for_vendor(uint16_t vendor_id, UpsHidComponent* parent) {
+std::unique_ptr<UpsProtocolBase> ProtocolFactory::create_for_vendor(uint16_t vendor_id, UpsHidComponent* parent) {
     ensure_initialized();
-    
+
     if (!parent) {
-        ESP_LOGE(FACTORY_TAG, "Cannot create protocol with null parent component");
+        if (logger::global_logger != nullptr) {
+            ESP_LOGE(FACTORY_TAG, "Cannot create protocol with null parent component");
+        }
         return nullptr;
     }
     
-    // Try vendor-specific protocols first
+    if (logger::global_logger != nullptr) {
+        ESP_LOGI(FACTORY_TAG, "--- Factory Auto-Detect Start: Looking for Vendor ID 0x%04X ---", vendor_id);
+    }
+
     auto& vendor_registry = get_vendor_registry();
     auto vendor_it = vendor_registry.find(vendor_id);
     
     if (vendor_it != vendor_registry.end()) {
-        ESP_LOGD(FACTORY_TAG, "Found %zu vendor-specific protocols for 0x%04X", 
-                 vendor_it->second.size(), vendor_id);
-        
         for (const auto& info : vendor_it->second) {
-            ESP_LOGD(FACTORY_TAG, "Trying vendor protocol '%s' for 0x%04X", 
-                     info.name.c_str(), vendor_id);
-            
-            auto protocol = info.creator(parent);
-            if (protocol && protocol->detect()) {
-                ESP_LOGI(FACTORY_TAG, "Successfully created protocol '%s' for vendor 0x%04X", 
+            // UNSERE NEUE DEBUG-AUSGABE: Zeigt an, welches Protokoll er für DIESE Vendor-ID testet
+            if (logger::global_logger != nullptr) {
+                ESP_LOGI(FACTORY_TAG, "  [Vendor ID Match] Found registered profile: '%s' for Vendor 0x%04X", 
                          info.name.c_str(), vendor_id);
+            }
+
+            auto protocol = info.creator(parent);
+            if (protocol) { 
+                if (logger::global_logger != nullptr) {
+                    ESP_LOGI(FACTORY_TAG, "  => SUCCESS: Loaded '%s' for Vendor 0x%04X", info.name.c_str(), vendor_id);
+                }
                 return protocol;
             }
         }
     }
     
-    // Try fallback protocols
+    // Fallback-Schleife
     auto& fallback_registry = get_fallback_registry();
-    ESP_LOGD(FACTORY_TAG, "Trying %zu fallback protocols for vendor 0x%04X", 
-             fallback_registry.size(), vendor_id);
-    
     for (const auto& info : fallback_registry) {
-        ESP_LOGD(FACTORY_TAG, "Trying fallback protocol '%s' for 0x%04X", 
-                 info.name.c_str(), vendor_id);
-        
+        // UNSERE NEUE DEBUG-AUSGABE: Zeigt die Fallbacks an, falls die Vendor-ID ins Leere lief
+        if (logger::global_logger != nullptr) {
+            ESP_LOGI(FACTORY_TAG, "  [Auto-Detect Fallback] Testing general profile: '%s'", info.name.c_str());
+        }
+
         auto protocol = info.creator(parent);
-        if (protocol && protocol->detect()) {
-            ESP_LOGI(FACTORY_TAG, "Successfully created fallback protocol '%s' for vendor 0x%04X", 
-                     info.name.c_str(), vendor_id);
+        if (protocol) { 
+            if (logger::global_logger != nullptr) {
+                ESP_LOGI(FACTORY_TAG, "  => SUCCESS: Loaded fallback profile '%s'", info.name.c_str());
+            }
             return protocol;
         }
     }
     
-    ESP_LOGW(FACTORY_TAG, "No suitable protocol found for vendor 0x%04X", vendor_id);
+    if (logger::global_logger != nullptr) {
+        ESP_LOGW(FACTORY_TAG, "--- Factory Auto-Detect End: No profile worked for 0x%04X ---", vendor_id);
+    }
     return nullptr;
 }
+
 
 std::vector<ProtocolFactory::ProtocolInfo> 
 ProtocolFactory::get_protocols_for_vendor(uint16_t vendor_id) {
@@ -177,61 +231,90 @@ bool ProtocolFactory::has_vendor_support(uint16_t vendor_id) {
     return has_vendor_specific || has_fallback;
 }
 
-std::unique_ptr<UpsProtocolBase> 
-ProtocolFactory::create_by_name(const std::string& protocol_name, UpsHidComponent* parent) {
+std::unique_ptr<UpsProtocolBase> ProtocolFactory::create_by_name(const std::string& protocol_name, UpsHidComponent* parent) {
     ensure_initialized();
-    
+
     if (!parent) {
-        ESP_LOGE(FACTORY_TAG, "Cannot create protocol with null parent component");
+        if (logger::global_logger != nullptr) {
+            ESP_LOGE(FACTORY_TAG, "Cannot create protocol with null parent component");
+        }
         return nullptr;
     }
-    
-    ESP_LOGD(FACTORY_TAG, "Creating protocol by name: %s", protocol_name.c_str());
-    
+
+    if (logger::global_logger != nullptr) {
+        ESP_LOGD(FACTORY_TAG, "Creating protocol by name: %s", protocol_name.c_str());
+    }
+
     // Search through all registered protocols to find one with matching name
     auto& vendor_registry = get_vendor_registry();
     for (const auto& vendor_pair : vendor_registry) {
         for (const auto& info : vendor_pair.second) {
+
+            // UNSERE NEUE DEBUG-AUSGABE: Zeigt jedes registrierte Hersteller-Protokoll an
+            if (logger::global_logger != nullptr) {
+                ESP_LOGI(FACTORY_TAG, "  [Vendor Loop] Checking registered protocol: '%s' against search: '%s'", 
+                         info.name.c_str(), protocol_name.c_str());
+            }
+
             // Match protocol name (case-insensitive)
             std::string info_name_lower = info.name;
             std::string protocol_name_lower = protocol_name;
             std::transform(info_name_lower.begin(), info_name_lower.end(), info_name_lower.begin(), ::tolower);
             std::transform(protocol_name_lower.begin(), protocol_name_lower.end(), protocol_name_lower.begin(), ::tolower);
-            
+
+            // Check if the name matches (e.g., "apc" in "apc hid protocol")
             if (info_name_lower.find(protocol_name_lower) != std::string::npos) {
-                ESP_LOGD(FACTORY_TAG, "Found matching protocol '%s' for name '%s'", 
-                         info.name.c_str(), protocol_name.c_str());
+                if (logger::global_logger != nullptr) {
+                    ESP_LOGD(FACTORY_TAG, "Found matching protocol '%s' for name '%s'",
+                             info.name.c_str(), protocol_name.c_str());
+                }
                 auto protocol = info.creator(parent);
                 if (protocol) {
-                    ESP_LOGI(FACTORY_TAG, "Successfully created protocol '%s' by name", 
-                             protocol->get_protocol_name().c_str());
+                    if (logger::global_logger != nullptr) {
+                        ESP_LOGI(FACTORY_TAG, "Successfully created protocol '%s' by name",
+                                 protocol->get_protocol_name().c_str());
+                    }
                     return protocol;
                 }
             }
         }
     }
-    
+
     // Search through fallback protocols
     auto& fallback_registry = get_fallback_registry();
     for (const auto& info : fallback_registry) {
+
+        // UNSERE NEUE DEBUG-AUSGABE: Zeigt jedes registrierte Fallback-Protokoll an
+        if (logger::global_logger != nullptr) {
+            ESP_LOGI(FACTORY_TAG, "  [Fallback Loop] Checking registered protocol: '%s' against search: '%s'", 
+                     info.name.c_str(), protocol_name.c_str());
+        }
+
         std::string info_name_lower = info.name;
         std::string protocol_name_lower = protocol_name;
         std::transform(info_name_lower.begin(), info_name_lower.end(), info_name_lower.begin(), ::tolower);
         std::transform(protocol_name_lower.begin(), protocol_name_lower.end(), protocol_name_lower.begin(), ::tolower);
-        
+
+        // Check if the name matches (e.g., "apc" in "apc hid protocol")
         if (info_name_lower.find(protocol_name_lower) != std::string::npos) {
-            ESP_LOGD(FACTORY_TAG, "Found matching fallback protocol '%s' for name '%s'", 
-                     info.name.c_str(), protocol_name.c_str());
+            if (logger::global_logger != nullptr) {
+                ESP_LOGD(FACTORY_TAG, "Found matching fallback protocol '%s' for name '%s'", 
+                         info.name.c_str(), protocol_name.c_str());
+            }
             auto protocol = info.creator(parent);
             if (protocol) {
-                ESP_LOGI(FACTORY_TAG, "Successfully created fallback protocol '%s' by name", 
-                         protocol->get_protocol_name().c_str());
+                if (logger::global_logger != nullptr) {
+                    ESP_LOGI(FACTORY_TAG, "Successfully created fallback protocol '%s' by name", 
+                             protocol->get_protocol_name().c_str());
+                }
                 return protocol;
             }
         }
     }
-    
-    ESP_LOGE(FACTORY_TAG, "No protocol found with name containing '%s'", protocol_name.c_str());
+
+    if (logger::global_logger != nullptr) {
+        ESP_LOGE(FACTORY_TAG, "No protocol found with name containing '%s'", protocol_name.c_str());
+    }
     return nullptr;
 }
 

@@ -23,7 +23,7 @@ static const uint16_t APC_USAGE_PAGE_POWER = 0x80;
 
 // HID Report IDs used by APC UPS devices (based on working ESP32 NUT server)
 static const uint8_t APC_REPORT_ID_STATUS = 0x01;    // UPS status flags
-static const uint8_t APC_REPORT_ID_BATTERY = 0x06;   // Battery level and runtime  
+static const uint8_t APC_REPORT_ID_BATTERY = 0x06;   // Battery level and runtime
 static const uint8_t APC_REPORT_ID_LOAD = 0x07;      // UPS load information
 static const uint8_t APC_REPORT_ID_VOLTAGE = 0x0e;   // Input/output voltage
 static const uint8_t APC_REPORT_ID_BEEPER = 0x1f;    // Beeper control
@@ -38,18 +38,26 @@ static const uint8_t APC_REPORT_ID_SENSITIVITY = 0x35;    // Input sensitivity (
 static const uint8_t APC_REPORT_ID_POWER_SUMMARY = 0x0C;   // PowerSummary.RemainingCapacity + RunTimeToEmpty
 static const uint8_t APC_REPORT_ID_PRESENT_STATUS = 0x16;  // PowerSummary.PresentStatus bitmap
 static const uint8_t APC_REPORT_ID_INPUT_VOLTAGE = 0x31;   // UPS.Input.Voltage
-static const uint8_t APC_REPORT_ID_LOAD_PERCENT = 0x50;    // UPS.PowerConverter.PercentLoad  
-static const uint8_t APC_REPORT_ID_OUTPUT_VOLTAGE = 0x09;  // PowerSummary.Voltage (legacy)
+static const uint8_t APC_REPORT_ID_LOAD_PERCENT = 0x50;    // UPS.PowerConverter.PercentLoad
+static const uint8_t APC_REPORT_ID_OUTPUT_VOLTAGE = 0x0e;  // PowerSummary.Voltage (legacy)
 static const uint8_t APC_REPORT_ID_FREQUENCY = 0x0D;       // Frequency information
+
+// 0x09 = 27.2 V  // Battery voltage at 24V system
+// 0x27 = 246.0 V
+// 0x28 = 4864.2 V
+// 0x29 = NA
+// 0x30 0 NA
+// 0x31 = 233 V // Input Volate Real
+
 
 // Extended configuration report IDs
 static const uint8_t APC_REPORT_ID_BATTERY_RUNTIME_LOW = 0x24; // Battery runtime low threshold
 static const uint8_t APC_REPORT_ID_BATTERY_VOLTAGE_NOMINAL = 0x25; // Battery voltage nominal
 static const uint8_t APC_REPORT_ID_BATTERY_VOLTAGE = 0x26;  // Battery voltage actual
-static const uint8_t APC_REPORT_ID_INPUT_VOLTAGE_NOMINAL = 0x30; // Input voltage nominal  
+static const uint8_t APC_REPORT_ID_INPUT_VOLTAGE_NOMINAL = 0x30; // Input voltage nominal
 static const uint8_t APC_REPORT_ID_DELAY_REBOOT = 0x40;    // Delay before reboot
 static const uint8_t APC_REPORT_ID_DELAY_SHUTDOWN = 0x41;  // Delay before shutdown
-static const uint8_t APC_REPORT_ID_TEST_RESULT = 0x52;     // Test result status
+static const uint8_t APC_REPORT_ID_TEST_RESULT = 0x21;     // Test result status
 static const uint8_t APC_REPORT_ID_AUDIBLE_BEEPER = 0x78;  // Alternative beeper control
 
 // Additional report IDs found in code
@@ -62,7 +70,7 @@ static const uint8_t APC_REPORT_ID_CHARGE_LOW = 0x11;      // Battery charge low
 static const uint8_t APC_REPORT_ID_INPUT_TRANSFER_LOW = 0x32;  // Input low voltage transfer point
 static const uint8_t APC_REPORT_ID_INPUT_TRANSFER_HIGH = 0x33; // Input high voltage transfer point
 static const uint8_t APC_REPORT_ID_PANEL_TEST = 0x79;      // Panel/UPS test control
-static const uint8_t APC_REPORT_ID_BATTERY_TEST = 0x52;    // Battery test control (same as test result)
+static const uint8_t APC_REPORT_ID_BATTERY_TEST = 0x21;    // Battery test control (same as test result)
 
 // Status bit masks
 static const uint8_t APC_STATUS_AC_PRESENT = 0x01;        // Bit 0: AC present
@@ -1750,12 +1758,12 @@ bool ApcHidProtocol::start_battery_test_quick() {
   }
   
   // APC Back-UPS ES 700G (PID=usb::PRODUCT_ID_APC_BACK_UPS_ES_700) is INPUT-ONLY and doesn't support HID SET_REPORT
-  uint16_t product_id = parent_->get_product_id();
-  if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
-    ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
-    ESP_LOGI(APC_HID_TAG, "Tip: Use the physical TEST button on the UPS instead");
-    return false;
-  }
+  //uint16_t product_id = parent_->get_product_id();
+  //if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
+  //  ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
+  //  ESP_LOGI(APC_HID_TAG, "Tip: Use the physical TEST button on the UPS instead");
+  //  return false;
+  //}
   
   // For supported models: Based on NUT debug logs, APC uses report ID APC_REPORT_ID_TEST_RESULT for battery test
   // Command value 1 = Quick test (based on NUT test_write_info struct)
@@ -1776,12 +1784,12 @@ bool ApcHidProtocol::start_battery_test_deep() {
   ESP_LOGI(APC_HID_TAG, "Starting APC deep battery test");
   
   // APC Back-UPS ES 700G (PID=usb::PRODUCT_ID_APC_BACK_UPS_ES_700) is INPUT-ONLY and doesn't support HID SET_REPORT
-  uint16_t product_id = parent_->get_product_id();
-  if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
-    ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
-    ESP_LOGI(APC_HID_TAG, "Tip: Use the physical TEST button on the UPS instead");
-    return false;
-  }
+  //uint16_t product_id = parent_->get_product_id();
+  //if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
+  //  ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
+  //  ESP_LOGI(APC_HID_TAG, "Tip: Use the physical TEST button on the UPS instead");
+  //  return false;
+  //}
   
   // For supported models: Based on NUT debug logs, APC uses report ID APC_REPORT_ID_TEST_RESULT for battery test
   // Command value 2 = Deep test (based on NUT test_write_info struct)
@@ -1802,12 +1810,12 @@ bool ApcHidProtocol::stop_battery_test() {
   ESP_LOGI(APC_HID_TAG, "Stopping APC battery test");
   
   // APC Back-UPS ES 700G (PID=usb::PRODUCT_ID_APC_BACK_UPS_ES_700) is INPUT-ONLY and doesn't support HID SET_REPORT
-  uint16_t product_id = parent_->get_product_id();
-  if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
-    ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
-    ESP_LOGI(APC_HID_TAG, "Physical test will stop automatically after completion");
-    return false;
-  }
+  //uint16_t product_id = parent_->get_product_id();
+  //if (product_id == usb::PRODUCT_ID_APC_BACK_UPS_ES_700) {
+  //  ESP_LOGW(APC_HID_TAG, "APC Back-UPS ES 700G (PID=0x%04X) is INPUT-ONLY device - battery tests not supported via HID", usb::PRODUCT_ID_APC_BACK_UPS_ES_700);
+  //  ESP_LOGI(APC_HID_TAG, "Physical test will stop automatically after completion");
+  //  return false;
+  //}
   
   // For supported models: Based on NUT debug logs, APC uses report ID APC_REPORT_ID_TEST_RESULT for battery test
   // Command value 3 = Abort test (based on NUT test_write_info struct)

@@ -1,0 +1,439 @@
+# Board: Waveshare ESP32-P4-WIFI6-POE-ETH (Waveshare)
+# Definition: definitions/boards/waveshare_esp32_p4_wifi6_poe_eth/manifest.yaml
+
+substitutions:
+  name: "apc-backups-pro"
+  friendly_name: "APC Back-UPS Pro 1500"
+  comment: "APC Back-UPS Pro 1500"
+  #APC Back-UPS Pro 1500: 865W nominal power
+  apc_max_power: 865.0
+
+  simulation_mode: "false"
+
+  # APC-specific settings
+  update_interval: "15s"
+  protocol_timeout: "30s"
+
+  # NUT Server Configuration
+  nut_port: "3493"                   # Standard NUT port
+  nut_username: "admin"              # Username for authentication
+  nut_password: "adminpass"          # Password (leave empty to disable auth)
+  nut_max_clients: "4"               # Maximum simultaneous clients (1-10)
+  nut_ups_name: "Back_UPS_Pro_1500"  # NUT protocol UPS name (optional, defaults to component ID)
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: ${comment}
+  platformio_options:
+    build_unflags: "-ccache"
+
+esp32:
+  variant: esp32p4
+  engineering_sample: true
+  flash_size: 32MB
+  framework:
+    type: esp-idf
+    advanced:
+      enable_idf_experimental_features: true
+
+external_components:
+  - source: github://preussal/esphome-components@DEV4
+    refresh: 0s
+    components: [ ups_hid, nut_server ]
+
+logger:
+  hardware_uart: UART0
+  level: ERROR
+  baud_rate: 0
+  logs:
+    component: ERROR
+    sensor: ERROR
+    text_sensor: ERROR
+    ups_hid: ERROR
+    ups_hid.apc: ERROR
+    ups_hid.apc_hid: ERROR
+    ups_hid.factory: ERROR
+    nut_server: ERROR
+api:
+  encryption:
+    key: "XXXxxxXXX="
+
+ota:
+  - platform: esphome
+    password: !secret apc_backups_pro__ota_password
+
+esp32_hosted:
+  active_high: true
+  clk_pin: GPIO18
+  cmd_pin: GPIO19
+  d0_pin: GPIO14
+  d1_pin: GPIO15
+  d2_pin: GPIO16
+  d3_pin: GPIO17
+  reset_pin: GPIO54
+  type: sdio
+  variant: ESP32C6
+
+update:
+  - platform: esp32_hosted
+    type: http
+    source: https://esphome.github.io/esp-hosted-firmware/manifest/esp32c6.json
+    name: ESP Co-processor Firmware
+    update_interval: 6h
+    icon: "mdi:cpu32-bit"
+
+web_server:
+  port: 80
+  # No internet/intranet required on the clients (all assets are inlined, compressed and served from flash):
+  local: true
+
+# Wifi Disabeld using ethernet
+#wifi:
+#  ssid: !secret wifi_ssid
+#  password: !secret wifi_password
+#  #domain: !secret wifi_dns_domain
+#captive_portal:
+
+ethernet:
+  clk:
+    mode: CLK_EXT_IN
+    pin: GPIO50
+  mdc_pin: GPIO31
+  mdio_pin: GPIO52
+  phy_addr: 1
+  power_pin: GPIO51
+  type: IP101
+  manual_ip:
+    gateway: 192.168.0.1
+    static_ip: 192.168.0.211
+    subnet: 255.255.255.0
+    dns1: 192.168.0.1
+
+mdns:
+  disabled: false
+
+http_request:
+
+# Main UPS HID Component
+ups_hid:
+  id: ${nut_ups_name}
+  update_interval: ${update_interval}
+  protocol_timeout: ${protocol_timeout}
+  protocol: auto               # Default: automatic selection based on USB vendor ID
+  #protocol: apc                # Force APC HID protocol
+  #protocol: cyberpower         # Force CyberPower HID protocol  
+  #protocol: generic            # Force Generic HID protocol
+
+  fallback_nominal_voltage: 230V  # European standard (IEC 60038) for better international compatibility
+  simulation_mode: ${simulation_mode}
+
+# NUT Server Component
+nut_server:
+  ups_hid_id: ${nut_ups_name}
+  port: ${nut_port}
+  username: "${nut_username}"
+  password: "${nut_password}"
+  max_clients: ${nut_max_clients}
+  ups_name: "${nut_ups_name}"
+
+button:
+    # Restart the ESP via Rebooting safely
+  - platform: restart
+    name: "ESP Restart"
+    icon: "mdi:restart"
+
+# Status indicators for NUT server
+binary_sensor:
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Overload Warning"
+    id: overload_warning
+    type: overload
+    device_class: power
+
+  # Template sensors to indicate NUT server status
+  - platform: template
+    name: "NUT Server Active"
+    id: nut_server_status
+    icon: "mdi:network-outline"
+    lambda: |-
+      // NUT server is active if UPS is connected and has valid data
+      return id(${nut_ups_name}).is_connected();
+    on_state:
+      then:
+        - if:
+            condition:
+              binary_sensor.is_on: nut_server_status
+            then:
+              - logger.log:
+                  format: "NUT Server: Online - Serving UPS on port ${nut_port}"
+                  level: INFO
+            else:
+              - logger.log: "NUT Server: Offline - UPS not connected or no valid data"
+
+sensor:
+  # System monitoring
+  - platform: uptime
+    name: "ESP Uptime"
+    id: uptime_sensor
+    update_interval: 60s
+
+  #- platform: wifi_signal
+  #  name: "WiFi Signal"
+  #  id: wifi_signal_sensor
+  #  update_interval: 60s
+
+  # APC-specific power calculations
+  - platform: template
+    name: "UPS Load Power (APC)"
+    id: ups_load_power_apc
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (!std::isnan(id(load_percentage).state)) {
+        float apc_max_power = ${apc_max_power};
+        return (apc_max_power * id(load_percentage).state) / 100.0;
+      }
+      return NAN;
+    update_interval: 30s
+
+  # Core UPS metrics - available on all protocols
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Battery Level"
+    id: battery_level
+    type: battery_level
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 0
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Input Voltage"
+    id: input_voltage
+    type: input_voltage
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Output Voltage"
+    id: output_voltage
+    type: output_voltage
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Load Percentage"
+    id: load_percentage
+    type: load_percent
+    unit_of_measurement: "%"
+    device_class: power_factor
+    state_class: measurement
+    accuracy_decimals: 0
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Runtime Remaining"
+    id: runtime_remaining
+    type: runtime
+    unit_of_measurement: "min"
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 0
+
+  # Advanced battery metrics
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Battery Voltage"
+    id: battery_voltage
+    type: battery_voltage
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 1
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Battery Voltage Nominal"
+    id: battery_voltage_nominal
+    type: battery_voltage_nominal
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 0
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Input Transfer Low"
+    id: input_transfer_low
+    type: input_transfer_low
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 0
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Input Transfer High"
+    id: input_transfer_high
+    type: input_transfer_high
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 0
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Input Frequency"
+    id: input_frequency
+    type: frequency
+    unit_of_measurement: "Hz"
+    state_class: measurement
+    accuracy_decimals: 1
+
+  # UPS configuration metrics
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "UPS Delay Shutdown"
+    id: ups_delay_shutdown
+    type: ups_delay_shutdown
+    unit_of_measurement: "s"
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 0
+
+script:
+  # APC-specific monitoring scripts
+  - id: apc_status_check
+    then:
+      - logger.log:
+          format: "APC Status: Battery=%.1f%%, Load=%.1fw, Status=%s"
+          args:
+            - "id(battery_level).state"
+            - "id(ups_load_power_apc).state"
+            - "id(ups_status_text).state.c_str()"
+          level: INFO
+
+  # Automation for NUT server status monitoring
+  - id: nut_server_status_check
+    then:
+      - lambda: |-
+          // Log current NUT server status and UPS data availability using data provider pattern
+          if (id(${nut_ups_name}).is_connected()) {
+            ESP_LOGI("nut_server", "Status Check: UPS Connected=YES, Data Available=YES");
+            ESP_LOGI("nut_server", "Available Data: Battery=%.1f%%, Input=%.1fV, Load=%.1f%%, Status=%s",
+                     id(${nut_ups_name}).get_battery_level(),
+                     id(${nut_ups_name}).get_input_voltage(),
+                     id(${nut_ups_name}).get_load_percent(),
+                     id(${nut_ups_name}).is_online() ? "Online" : "On Battery");
+          } else {
+            ESP_LOGW("nut_server", "Status Check: UPS not connected - NUT server inactive");
+          }
+
+interval:
+  # APC device monitoring
+  - interval: 60s
+    then:
+      - script.execute: apc_status_check
+  # Status monitoring interval
+  - interval: 60s
+    then:
+      - script.execute: nut_server_status_check
+
+text_sensor:
+  # NUT server connection info
+  - platform: template
+    name: "NUT Server Info"
+    id: nut_server_info
+    icon: "mdi:information-outline"
+    lambda: |-
+      std::string info = "UPS: ${nut_ups_name}, Port: ${nut_port}";
+      if (std::string("${nut_password}").empty()) {
+        info += ", Auth: Disabled";
+      } else {
+        info += ", Auth: Enabled (${nut_username})";
+      }
+      info += ", Max Clients: ${nut_max_clients}";
+      return info;
+ 
+  # Essential text sensors
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "UPS Status"
+    id: ups_status_text
+    type: status
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Detected Protocol"
+    id: ups_protocol
+    type: protocol
+
+  # Device identification
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "UPS Model"
+    id: ups_model
+    type: model
+
+  - platform: ethernet_info
+    ip_address:
+      name: ESP IP Address
+    dns_address:
+      name: ESP DNS Address
+    mac_address:
+      name: ESP MAC Address
+
+  #- platform: wifi_info
+  #  ip_address:
+  #    name: "IP Address"
+  #    id: ip_address
+
+  - platform: version
+    name: "ESPHome Version"
+    id: esphome_version
+
+  # Extended device information
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "UPS Serial Number"
+    id: ups_serial_number
+    type: serial_number
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "UPS Beeper Status"
+    id: ups_beeper_status
+    type: ups_beeper_status
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Input Sensitivity"
+    id: input_sensitivity
+    type: input_sensitivity
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "UPS Manufacture Date"
+    id: ups_manufacture_date
+    type: ups_mfr_date
+    icon: "mdi:calendar-clock"
+
+  - platform: ups_hid
+    ups_hid_id: ${nut_ups_name}
+    name: "Battery Status"
+    id: battery_status
+    type: battery_status
+    icon: "mdi:battery-heart"
+
+number:
