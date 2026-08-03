@@ -21,14 +21,50 @@ ProtocolFactory::get_fallback_registry() {
     return fallback_registry;
 }
 
+// Creator functions for the bundled protocols. Declared here rather than in a
+// header so that protocol_factory.cpp carries an undefined reference to each
+// one; see register_builtin_protocols() in protocol_factory.h for why that
+// matters.
+std::unique_ptr<UpsProtocolBase> create_cyberpower_protocol(UpsHidComponent* parent);
+std::unique_ptr<UpsProtocolBase> create_apc_protocol(UpsHidComponent* parent);
+std::unique_ptr<UpsProtocolBase> create_generic_protocol(UpsHidComponent* parent);
+
 void ProtocolFactory::ensure_initialized() {
-    // Registries are initialized on first access due to static storage
-    // This function exists for explicit initialization if needed
     static bool initialized = false;
-    if (!initialized) {
-        ESP_LOGD(FACTORY_TAG, "Protocol factory registries initialized");
-        initialized = true;
+    if (initialized) {
+        return;
     }
+    // Set before registering: the register_* calls below re-enter this
+    // function, and this flag is what stops that recursing.
+    initialized = true;
+
+    ESP_LOGD(FACTORY_TAG, "Protocol factory registries initialized");
+    register_builtin_protocols();
+}
+
+void ProtocolFactory::register_builtin_protocols() {
+    ProtocolInfo cyberpower;
+    cyberpower.creator = create_cyberpower_protocol;
+    cyberpower.name = "CyberPower HID Protocol";
+    cyberpower.description = "CyberPower CP series HID protocol with comprehensive sensor support and test functionality";
+    cyberpower.supported_vendors = {0x0764};
+    cyberpower.priority = 100;
+    register_protocol_for_vendor(0x0764, cyberpower);
+
+    ProtocolInfo apc;
+    apc.creator = create_apc_protocol;
+    apc.name = "APC HID Protocol";
+    apc.description = "APC Back-UPS and Smart-UPS HID protocol implementation with comprehensive sensor support";
+    apc.supported_vendors = {0x051D};
+    apc.priority = 100;
+    register_protocol_for_vendor(0x051D, apc);
+
+    ProtocolInfo generic;
+    generic.creator = create_generic_protocol;
+    generic.name = "Generic HID Protocol";
+    generic.description = "Universal HID protocol fallback for unknown UPS vendors with basic monitoring capabilities";
+    generic.priority = 10;
+    register_fallback_protocol(generic);
 }
 
 void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id, 
@@ -36,8 +72,19 @@ void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id,
     ensure_initialized();
     
     auto& registry = get_vendor_registry();
-    registry[vendor_id].push_back(info);
-    
+
+    // The macro registrar for a protocol fires as well as the explicit
+    // registration in register_builtin_protocols(); keep only the first.
+    auto& entries = registry[vendor_id];
+    if (std::any_of(entries.begin(), entries.end(),
+                    [&info](const ProtocolInfo& existing) { return existing.name == info.name; })) {
+        ESP_LOGD(FACTORY_TAG, "Protocol '%s' already registered for vendor 0x%04X, skipping",
+                 info.name.c_str(), vendor_id);
+        return;
+    }
+
+    entries.push_back(info);
+
     // Sort by priority (higher first)
     std::sort(registry[vendor_id].begin(), registry[vendor_id].end(),
               [](const ProtocolInfo& a, const ProtocolInfo& b) {
@@ -52,8 +99,16 @@ void ProtocolFactory::register_fallback_protocol(const ProtocolInfo& info) {
     ensure_initialized();
     
     auto& registry = get_fallback_registry();
+
+    // Same duplicate suppression as the vendor registry above.
+    if (std::any_of(registry.begin(), registry.end(),
+                    [&info](const ProtocolInfo& existing) { return existing.name == info.name; })) {
+        ESP_LOGD(FACTORY_TAG, "Fallback protocol '%s' already registered, skipping", info.name.c_str());
+        return;
+    }
+
     registry.push_back(info);
-    
+
     // Sort by priority (higher first)
     std::sort(registry.begin(), registry.end(),
               [](const ProtocolInfo& a, const ProtocolInfo& b) {
