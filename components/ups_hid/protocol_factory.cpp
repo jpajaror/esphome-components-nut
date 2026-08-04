@@ -38,7 +38,12 @@ void ProtocolFactory::ensure_initialized() {
     // function, and this flag is what stops that recursing.
     initialized = true;
 
-    ESP_LOGD(FACTORY_TAG, "Protocol factory registries initialized");
+    // NOTE: nothing on this path may log. Once the protocol translation units
+    // are linked in, their REGISTER_UPS_* static registrars run during static
+    // initialization, which re-enters here long before App.setup() constructs
+    // the Logger. esp_log_printf_() only null-checks logger::global_logger
+    // under ESPHOME_DEBUG, so a log call here dereferences null and resets the
+    // device. Registration is reported from create_for_vendor() instead.
     register_builtin_protocols();
 }
 
@@ -78,8 +83,6 @@ void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id,
     auto& entries = registry[vendor_id];
     if (std::any_of(entries.begin(), entries.end(),
                     [&info](const ProtocolInfo& existing) { return existing.name == info.name; })) {
-        ESP_LOGD(FACTORY_TAG, "Protocol '%s' already registered for vendor 0x%04X, skipping",
-                 info.name.c_str(), vendor_id);
         return;
     }
 
@@ -90,9 +93,7 @@ void ProtocolFactory::register_protocol_for_vendor(uint16_t vendor_id,
               [](const ProtocolInfo& a, const ProtocolInfo& b) {
                   return a.priority > b.priority;
               });
-    
-    ESP_LOGI(FACTORY_TAG, "Registered protocol '%s' for vendor 0x%04X (priority %d)", 
-             info.name.c_str(), vendor_id, info.priority);
+    // Deliberately no logging here - see ensure_initialized().
 }
 
 void ProtocolFactory::register_fallback_protocol(const ProtocolInfo& info) {
@@ -103,7 +104,6 @@ void ProtocolFactory::register_fallback_protocol(const ProtocolInfo& info) {
     // Same duplicate suppression as the vendor registry above.
     if (std::any_of(registry.begin(), registry.end(),
                     [&info](const ProtocolInfo& existing) { return existing.name == info.name; })) {
-        ESP_LOGD(FACTORY_TAG, "Fallback protocol '%s' already registered, skipping", info.name.c_str());
         return;
     }
 
@@ -114,9 +114,7 @@ void ProtocolFactory::register_fallback_protocol(const ProtocolInfo& info) {
               [](const ProtocolInfo& a, const ProtocolInfo& b) {
                   return a.priority > b.priority;
               });
-    
-    ESP_LOGI(FACTORY_TAG, "Registered fallback protocol '%s' (priority %d)", 
-             info.name.c_str(), info.priority);
+    // Deliberately no logging here - see ensure_initialized().
 }
 
 std::unique_ptr<UpsProtocolBase> 
@@ -127,7 +125,20 @@ ProtocolFactory::create_for_vendor(uint16_t vendor_id, UpsHidComponent* parent) 
         ESP_LOGE(FACTORY_TAG, "Cannot create protocol with null parent component");
         return nullptr;
     }
-    
+
+    // Registration happens during static init, where logging is unsafe, so
+    // report what ended up registered on the first runtime call instead.
+    static bool reported = false;
+    if (!reported) {
+        reported = true;
+        size_t vendor_count = 0;
+        for (const auto& entry : get_vendor_registry()) {
+            vendor_count += entry.second.size();
+        }
+        ESP_LOGI(FACTORY_TAG, "Protocol registry: %zu vendor-specific, %zu fallback",
+                 vendor_count, get_fallback_registry().size());
+    }
+
     // Try vendor-specific protocols first
     auto& vendor_registry = get_vendor_registry();
     auto vendor_it = vendor_registry.find(vendor_id);
