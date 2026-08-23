@@ -330,29 +330,34 @@ bool GoldenMateProtocol::parse_megatec_string(const HidReport &report, UpsData &
   float temp = std::atof(temp_str.c_str()) / 10.0f;
   // No dedicated temperature field in UpsData, but log it
 
-  // Field 8: Status bits (8 chars)
+  // Field 8: Status bits (8 chars, offsets 24-31)
+  // Only trust these when the full field is present. A short read here used to
+  // leave on_battery false and publish "Online", which is the worst possible
+  // failure mode: the UPS would report mains power through an actual outage.
   std::string status_str;
-  if (packed.size() >= 30) {
+  bool status_valid = packed.size() >= 32;
+  if (status_valid) {
     status_str = packed.substr(24, 8);
+  } else {
+    ESP_LOGD(GM_TAG, "Status field incomplete (%zu digits, need 32), leaving power status unchanged",
+             packed.size());
   }
 
-  // Parse status bits
   bool on_battery = false;
-  if (status_str.size() >= 7) {
+  if (status_valid) {
     // Bit 6 (index 1 from left in "01000000") = on battery
     on_battery = (status_str[1] == '1');
-  }
 
-  // Set power status
-  if (on_battery) {
-    data.power.status = "On Battery";
-    data.battery.status = "Discharging";
-  } else {
-    data.power.status = "Online";
-    if (batt_pct >= 99.0f) {
-      data.battery.status = "Full";
+    if (on_battery) {
+      data.power.status = "On Battery";
+      data.battery.status = "Discharging";
     } else {
-      data.battery.status = "Charging";
+      data.power.status = "Online";
+      if (batt_pct >= 99.0f) {
+        data.battery.status = "Full";
+      } else {
+        data.battery.status = "Charging";
+      }
     }
   }
 
