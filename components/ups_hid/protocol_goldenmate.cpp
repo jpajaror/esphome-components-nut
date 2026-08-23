@@ -9,11 +9,20 @@ namespace ups_hid {
 
 static const char *const GM_TAG = "ups_hid.goldenmate";
 
-// Register for vendor 0x06DA (-BMS- / GoldenMate) with high priority
+// 0x075D is the iDowell vendor ID and is unambiguous: the GoldenMate LiFePO4
+// and Pro units are the only devices on it.
 REGISTER_UPS_PROTOCOL_FOR_VENDOR(
-    0x06DA, GoldenMateProtocol,
+    0x075D, GoldenMateProtocolIdowell,
     [](UpsHidComponent *p) { return std::make_unique<GoldenMateProtocol>(p); },
-    "GoldenMate BMS", "GoldenMate / BMS Smart-Battery UPS", 200);
+    "GoldenMate BMS", "GoldenMate / iDowell BMS Smart-Battery UPS", 200);
+
+// 0x06DA is the shared Phoenixtec vendor ID, also used by Liebert and MGE.
+// detect() gates this one on the -BMS- / Smart-Battery device strings so that
+// anything else on 0x06DA falls through to the generic HID protocol.
+REGISTER_UPS_PROTOCOL_FOR_VENDOR(
+    0x06DA, GoldenMateProtocolPhoenixtec,
+    [](UpsHidComponent *p) { return std::make_unique<GoldenMateProtocol>(p); },
+    "GoldenMate BMS", "GoldenMate / iDowell BMS Smart-Battery UPS", 200);
 
 bool GoldenMateProtocol::read_feature_report(uint8_t report_id, HidReport &report) {
   if (!parent_->is_device_connected()) {
@@ -34,52 +43,103 @@ bool GoldenMateProtocol::read_feature_report(uint8_t report_id, HidReport &repor
   return false;
 }
 
-bool GoldenMateProtocol::detect() {
-  ESP_LOGE(GM_TAG, "=== GoldenMate detect() called! vendor=0x%04X ===", parent_->get_vendor_id());
+bool GoldenMateProtocol::has_bms_strings(bool &strings_readable) {
+  std::string manufacturer;
+  std::string product;
 
-  // Vendor check skipped — we're registered for 0x06DA only
-  // If detect() is called, registration worked
+  bool got_manufacturer = parent_->get_string_descriptor(1, manufacturer) == ESP_OK;
+  bool got_product = parent_->get_string_descriptor(2, product) == ESP_OK;
+
+  strings_readable = got_manufacturer || got_product;
+  if (!strings_readable) {
+    return false;
+  }
+
+  ESP_LOGD(GM_TAG, "Device strings: manufacturer='%s' product='%s'",
+           manufacturer.c_str(), product.c_str());
+
+  // Same test as idowell_is_goldenmate() in NUT: the firmware reports "-BMS-"
+  // as the manufacturer and "Smart-Battery" as the product on both vendor IDs.
+  return manufacturer.find("BMS") != std::string::npos ||
+         product.find("Smart-Battery") != std::string::npos;
+}
+
+bool GoldenMateProtocol::vendor_gate_passes() {
+  const uint16_t vendor_id = parent_->get_vendor_id();
+
+  // 0x075D belongs to iDowell alone, so no string gate is needed.
+  if (vendor_id == VENDOR_ID_IDOWELL) {
+    return true;
+  }
+
+  if (vendor_id != VENDOR_ID_PHOENIXTEC) {
+    ESP_LOGD(GM_TAG, "Vendor 0x%04X is not a GoldenMate vendor ID", vendor_id);
+    return false;
+  }
+
+  // 0x06DA is shared with Liebert and MGE. Only claim it when the device
+  // identifies itself as -BMS- / Smart-Battery, so an Eaton/MGE Ellipse on the
+  // same vendor ID still reaches the generic HID protocol.
+  bool strings_readable = false;
+  if (has_bms_strings(strings_readable)) {
+    return true;
+  }
+
+  if (strings_readable) {
+    ESP_LOGD(GM_TAG, "Vendor 0x06DA device is not a -BMS- unit, deferring to other protocols");
+    return false;
+  }
+
+  // Descriptors did not come back. Fall through to the report-shape checks
+  // below, which are specific enough to reject a non-BMS device on their own.
+  ESP_LOGW(GM_TAG, "Could not read device strings on vendor 0x06DA, "
+                   "falling back to report-shape detection");
+  return true;
+}
+
+bool GoldenMateProtocol::detect() {
+  ESP_LOGD(GM_TAG, "Detecting GoldenMate BMS protocol (vendor 0x%04X, product 0x%04X)",
+           parent_->get_vendor_id(), parent_->get_product_id());
+
+  if (!vendor_gate_passes()) {
+    return false;
+  }
 
   // Try reading Report 0x01 — should be at least 21 bytes
   HidReport report;
   if (!read_feature_report(REPORT_ID_STATUS, report)) {
-    ESP_LOGW(GM_TAG, "Failed to read Report 0x01");
+    ESP_LOGD(GM_TAG, "Failed to read Report 0x01");
     return false;
   }
 
   ESP_LOGD(GM_TAG, "Report 0x01: %zu bytes", report.data.size());
   if (report.data.size() >= 21) {
-    ESP_LOGD(GM_TAG, "Report 0x01 bytes: %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d",
-             report.data[0], report.data[1], report.data[2], report.data[3],
-             report.data[4], report.data[5], report.data[6], report.data[7],
-             report.data[8], report.data[9], report.data[10], report.data[11],
-             report.data[12], report.data[13], report.data[14], report.data[15],
-             report.data[16], report.data[17], report.data[18], report.data[19],
-             report.data[20]);
+    ESP_LOGV(GM_TAG, "Report 0x01 bytes: %s",
+             format_hex_pretty(report.data.data(), 21).c_str());
   }
 
   if (report.data.size() < 21) {
-    ESP_LOGW(GM_TAG, "Report 0x01 too short: %zu bytes", report.data.size());
+    ESP_LOGD(GM_TAG, "Report 0x01 too short: %zu bytes", report.data.size());
     return false;
   }
 
   // Sanity check: bytes 8-9 should be design/full capacity (typically 100)
   if (report.data[8] > 100 || report.data[9] > 100) {
-    ESP_LOGW(GM_TAG, "Capacity check failed: byte8=%d byte9=%d", report.data[8], report.data[9]);
+    ESP_LOGD(GM_TAG, "Capacity check failed: byte8=%d byte9=%d", report.data[8], report.data[9]);
     return false;
   }
 
   // Also verify Report 0x0C exists and has ASCII data at offset 30
   HidReport megatec;
   if (!read_feature_report(REPORT_ID_MEGATEC, megatec)) {
-    ESP_LOGW(GM_TAG, "Failed to read Report 0x0C");
+    ESP_LOGD(GM_TAG, "Failed to read Report 0x0C");
     return false;
   }
 
   ESP_LOGD(GM_TAG, "Report 0x0C: %zu bytes", megatec.data.size());
 
   if (megatec.data.size() < 62) {
-    ESP_LOGW(GM_TAG, "Report 0x0C too short: %zu bytes", megatec.data.size());
+    ESP_LOGD(GM_TAG, "Report 0x0C too short: %zu bytes", megatec.data.size());
     return false;
   }
 
@@ -92,11 +152,12 @@ bool GoldenMateProtocol::detect() {
   }
 
   if (ascii_count < 20) {
-    ESP_LOGW(GM_TAG, "Not enough ASCII digits in Report 0x0C (found %d)", ascii_count);
+    ESP_LOGD(GM_TAG, "Not enough ASCII digits in Report 0x0C (found %d)", ascii_count);
     return false;
   }
 
-  ESP_LOGI(GM_TAG, "GoldenMate BMS protocol detected (vendor 0x06DA)");
+  ESP_LOGI(GM_TAG, "GoldenMate BMS protocol detected (vendor 0x%04X, product 0x%04X)",
+           parent_->get_vendor_id(), parent_->get_product_id());
   return true;
 }
 
@@ -346,9 +407,10 @@ bool GoldenMateProtocol::read_data(UpsData &data) {
     }
   }
 
-  // Set apparent power rating (1000VA for the GoldenMate 1000VA Pro)
-  // The packed Megatec bytes 18-19 in Report 0x01 = 1320, possibly VA rating
-  data.power.apparent_power_nominal = 1000.0f;
+  // No apparent power rating is published here. This family spans several
+  // ratings (1000VA/800W, 1500VA, ...) and nothing in report 0x01 or 0x0C has
+  // been confirmed to carry it, so hardcoding one model's value would report a
+  // wrong nominal VA on every other unit.
 
   return success;
 }

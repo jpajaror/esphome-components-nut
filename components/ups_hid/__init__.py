@@ -30,7 +30,7 @@ KNOWN_VENDOR_IDS = {
     0x0592: "Powerware",
     0x05DD: "Delta Electronics",
     0x06DA: "MGE UPS Systems",
-    0x075D: "Idowell",
+    0x075D: "iDowell / GoldenMate",
     0x0764: "CyberPower",
     0x09AE: "Tripp Lite",
     0x09D6: "KSTAR",

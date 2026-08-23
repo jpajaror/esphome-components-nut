@@ -70,7 +70,13 @@ UPS USB Port (Type-B)  ←→  USB Cable  ←→  ESP32-S3 USB OTG Port
 | **CyberPower** | CP1500EPFCLCD, CP1000PFCLCD | CyberPower HID | 0x0764 | ✅ Confirmed |
 | **Tripp Lite** | SMART1500LCDT, UPS series | Generic HID | 0x09AE | ⚠️ Limited |
 | **Eaton/MGE** | Ellipse, Evolution series | Generic HID | 0x06DA | ⚠️ Limited |
+| **GoldenMate / iDowell** | 1000VA Pro, LiFePO4 series | GoldenMate BMS | 0x075D, 0x06DA¹ | ❌ Not supported |
 | **Belkin** | Older USB UPS models | Generic HID | 0x050D | ⚠️ Limited |
+
+¹ GoldenMate ships on two vendor IDs. 0x06DA is shared with Eaton/MGE and Liebert, so the
+GoldenMate protocol only claims a 0x06DA device when its USB string descriptors report the
+`-BMS-` / `Smart-Battery` firmware; everything else on that vendor ID falls through to the
+generic HID protocol. NUT gates its `idowell-hid` subdriver the same way.
 
 **Beeper Control Legend:**
 - ✅ **Confirmed**: Full beeper control tested and working (enable/disable/mute/test)

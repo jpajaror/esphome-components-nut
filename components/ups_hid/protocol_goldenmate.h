@@ -6,10 +6,20 @@ namespace esphome {
 namespace ups_hid {
 
 /**
- * GoldenMate / BMS Smart-Battery HID Protocol
+ * GoldenMate / iDowell BMS Smart-Battery HID Protocol
  *
- * Vendor: 0x06DA (-BMS-), Product: 0xFFFF (Smart-Battery)
- * Used by GoldenMate 1000VA Pro and similar BMS-based UPS units.
+ * These units report manufacturer "-BMS-" and product "Smart-Battery" and ship
+ * under two different USB vendor IDs:
+ *
+ *   0x075D:0x0300  iDowell, the common GoldenMate LiFePO4 / Pro units
+ *   0x06DA:0xFFFF  GoldenMate 1000VA/800W LiFePO4, same firmware and HID
+ *                  descriptor on the shared Phoenixtec vendor ID
+ *
+ * NUT reached the same conclusion for its idowell-hid subdriver: both IDs are
+ * claimed, but 0x06DA is gated on the device strings because that vendor ID is
+ * shared with Liebert and MGE units (see NUT issue #3501 / PR #3502). We do the
+ * same in detect() so an Eaton/MGE Ellipse on 0x06DA still falls through to the
+ * generic HID protocol.
  *
  * Data sources:
  *   Report 0x01 (Feature, 21 bytes) - binary status:
@@ -40,6 +50,11 @@ class GoldenMateProtocol : public UpsProtocolBase {
   DeviceInfo::DetectedProtocol get_protocol_type() const override { return DeviceInfo::PROTOCOL_GENERIC_HID; }
   std::string get_protocol_name() const override { return "GoldenMate BMS"; }
 
+  // iDowell: the vendor ID is unambiguous, every device on it is one of these.
+  static const uint16_t VENDOR_ID_IDOWELL = 0x075D;
+  // Phoenixtec: shared with Liebert / MGE, so claims here must be string-gated.
+  static const uint16_t VENDOR_ID_PHOENIXTEC = 0x06DA;
+
  private:
   static const uint8_t REPORT_ID_STATUS = 0x01;
   static const uint8_t REPORT_ID_MEGATEC = 0x0C;
@@ -49,6 +64,11 @@ class GoldenMateProtocol : public UpsProtocolBase {
     std::vector<uint8_t> data;
     HidReport() : report_id(0) {}
   };
+
+  // True when the USB string descriptors identify a -BMS- Smart-Battery unit.
+  // Mirrors idowell_is_goldenmate() in NUT's idowell-hid.c.
+  bool has_bms_strings(bool &strings_readable);
+  bool vendor_gate_passes();
 
   bool read_feature_report(uint8_t report_id, HidReport &report);
   bool parse_binary_status(const HidReport &report, UpsData &data);
