@@ -21,11 +21,34 @@ ProtocolFactory::get_fallback_registry() {
     return fallback_registry;
 }
 
+namespace {
+// Force the linker to retain protocol_apc.cpp, protocol_cyberpower.cpp, and
+// protocol_generic.cpp when this component is built as its own ESP-IDF
+// static archive. Taking the address of each creator function is enough to
+// count as an external reference into those translation units, without
+// actually invoking anything (the parent pointer would be null here, and
+// these are never called through this table). See the comment above the
+// forward declarations in protocol_factory.h for the full explanation.
+//
+// If you add a new protocol file, add its create_*_protocol function here
+// too, or its self-registration may silently be dropped from the build.
+using ProtocolCreatorFn = std::unique_ptr<UpsProtocolBase> (*)(UpsHidComponent *);
+volatile ProtocolCreatorFn kForceLinkedProtocolCreators[] = {
+    &create_apc_protocol,
+    &create_cyberpower_protocol,
+    &create_generic_protocol,
+};
+}  // namespace
+
 void ProtocolFactory::ensure_initialized() {
     // Registries are initialized on first access due to static storage
     // This function exists for explicit initialization if needed
     static bool initialized = false;
     if (!initialized) {
+        // Touch the force-link table so the compiler can't optimize away the
+        // "unused" array itself (it's otherwise never read at runtime).
+        (void) kForceLinkedProtocolCreators[0];
+
         ESP_LOGD(FACTORY_TAG, "Protocol factory registries initialized");
         initialized = true;
     }

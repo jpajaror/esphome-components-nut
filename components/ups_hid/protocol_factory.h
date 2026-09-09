@@ -13,6 +13,29 @@ namespace ups_hid {
 class UpsProtocolBase;
 class UpsHidComponent;
 
+// Forward declarations of the per-protocol creator functions.
+//
+// Each protocol (protocol_apc.cpp, protocol_cyberpower.cpp, protocol_generic.cpp)
+// registers itself via a file-local static object whose constructor runs at
+// program start (see REGISTER_UPS_PROTOCOL_FOR_VENDOR / REGISTER_UPS_FALLBACK_PROTOCOL
+// below). Nothing outside those files references any symbol they define, which
+// means that under ESP-IDF's component-archive linking (each ESPHome component
+// folder is built into its own static .a and linked with --gc-sections), the
+// linker is free to drop those .o files entirely — including their
+// self-registering constructors — since nothing in the rest of the program
+// appears to need them. When that happens the protocol silently never
+// registers, and both `protocol: auto` and an explicit `protocol: <name>`
+// selection fail with "No protocol found with name containing '<name>'" even
+// though the code compiled without any error.
+//
+// Declaring and referencing these functions from protocol_factory.cpp (which
+// is unconditionally linked in, since UpsHidComponent calls into
+// ProtocolFactory directly) forces the linker to keep each protocol's
+// translation unit, and with it, its static registrar.
+std::unique_ptr<UpsProtocolBase> create_apc_protocol(UpsHidComponent *parent);
+std::unique_ptr<UpsProtocolBase> create_cyberpower_protocol(UpsHidComponent *parent);
+std::unique_ptr<UpsProtocolBase> create_generic_protocol(UpsHidComponent *parent);
+
 /**
  * Protocol Factory with Self-Registration Support
  * 
